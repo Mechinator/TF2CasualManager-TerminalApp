@@ -5,9 +5,9 @@ import os
 import sys
 import traceback
 import re
-import winreg
+import platform
 
-__version__ = '1.6.0'
+__version__ = '1.6.2'
 
 
 class Map(object):
@@ -70,14 +70,18 @@ def ints2maps(numbers, groups):
 def maps2ints(maps, maps_data):
     groups = list()
     for game_map in maps:
-        m = maps_data[game_map]
-        group = m.group
-        bit = m.bit
-        if len(groups) - 1 < group:
-            groups.extend([[] for _ in range(group - len(groups) + 1)])
-        if len(groups[group]) - 1 < bit:
-            groups[group].extend(['0'] * (bit - len(groups[group]) + 1))
-        groups[group][bit] = '1'
+        try:
+            m = maps_data[game_map.strip()]
+            group = m.group
+            bit = m.bit
+            if len(groups) - 1 < group:
+                groups.extend([[] for _ in range(group - len(groups) + 1)])
+            if len(groups[group]) - 1 < bit:
+                groups[group].extend(['0'] * (bit - len(groups[group]) + 1))
+            groups[group][bit] = '1'
+        except KeyError:
+            print(f"Warning: Map '{game_map}' not found in map data.")
+            continue
     groups = list(map(lambda x: ['0'] if not x else x, groups))
     groups = list(map(lambda x: int(''.join(reversed(x)), 2), groups))
     return groups
@@ -149,32 +153,38 @@ def error(msg):
 
 
 def tf2():
-    vdf_pat = re.compile(r'^\s*"\d+"\s*".+"\s*')
-    steam = None
-    reg_key = r'Software\Valve\Steam'
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key) as handle:
-            steam = winreg.QueryValueEx(handle, 'SteamPath')[
-                0].replace('/', '\\')
-    except:
-        return None
-    libs = [steam]
-    libinfo = os.path.join(steam, r'steamapps\libraryfolders.vdf')
-    try:
-        with open(libinfo, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if vdf_pat.match(line):
-                    libs.append(line.split()[1].strip(
-                        '"').replace('\\\\', '\\'))
-    except:
-        pass
-    for lib in libs:
-        find_acf = os.path.join(lib, r'steamapps\appmanifest_440.acf')
-        if os.path.isfile(find_acf):
-            tf_root = os.path.join(lib, r'steamapps\common\Team Fortress 2\tf')
-            if os.path.isdir(tf_root):
-                return tf_root
+    if platform.system() == 'Windows':
+        vdf_pat = re.compile(r'^\s*"\d+"\s*".+"\s*')
+        steam = None
+        reg_key = r'Software\Valve\Steam'
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key) as handle:
+                steam = winreg.QueryValueEx(handle, 'SteamPath')[
+                    0].replace('/', '\\')
+        except:
+            return None
+        libs = [steam]
+        libinfo = os.path.join(steam, r'steamapps\libraryfolders.vdf')
+        try:
+            with open(libinfo, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if vdf_pat.match(line):
+                        libs.append(line.split()[1].strip(
+                            '"').replace('\\\\', '\\'))
+        except:
+            pass
+        for lib in libs:
+            find_acf = os.path.join(lib, r'steamapps\appmanifest_440.acf')
+            if os.path.isfile(find_acf):
+                tf_root = os.path.join(lib, r'steamapps\common\Team Fortress 2\tf')
+                if os.path.isdir(tf_root):
+                    return tf_root
+    elif platform.system() == 'Linux':
+        steam_path = os.path.expanduser('~/.steam/steam')
+        tf_root = os.path.join(steam_path, 'steamapps/common/Team Fortress 2/tf')
+        if os.path.isdir(tf_root):
+            return tf_root
     return None
 
 
@@ -182,12 +192,14 @@ def main():
     app_path = get_path()
     data_file = None
     path = [
-        os.path.join(app_path, r'data\casual.min.json'),
-        os.path.join(app_path, r'data\casual.json')
+        os.path.join(app_path, r'data/casual.min.json'),
+        os.path.join(app_path, r'data/casual.json')
     ]
-    for f in path:
-        if os.path.isfile(f):
-            data_file = f
+    print("Checking for data files in the following paths:")
+    for p in path:
+        print(p)
+        if os.path.isfile(p):
+            data_file = p
             break
     if not data_file:
         error('Map selection data file not found.\nPlease re-download TF2CM.')
