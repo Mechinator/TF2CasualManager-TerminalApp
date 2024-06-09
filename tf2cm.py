@@ -4,10 +4,10 @@ import json
 import os
 import sys
 import traceback
+import re
+import winreg
 
-import steam
-
-__version__ = '1.5.1'
+__version__ = '1.6.0'
 
 
 class Map(object):
@@ -148,6 +148,36 @@ def error(msg):
     print(f"Error: {msg}")
 
 
+def tf2():
+    vdf_pat = re.compile(r'^\s*"\d+"\s*".+"\s*')
+    steam = None
+    reg_key = r'Software\Valve\Steam'
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, reg_key) as handle:
+            steam = winreg.QueryValueEx(handle, 'SteamPath')[
+                0].replace('/', '\\')
+    except:
+        return None
+    libs = [steam]
+    libinfo = os.path.join(steam, r'steamapps\libraryfolders.vdf')
+    try:
+        with open(libinfo, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if vdf_pat.match(line):
+                    libs.append(line.split()[1].strip(
+                        '"').replace('\\\\', '\\'))
+    except:
+        pass
+    for lib in libs:
+        find_acf = os.path.join(lib, r'steamapps\appmanifest_440.acf')
+        if os.path.isfile(find_acf):
+            tf_root = os.path.join(lib, r'steamapps\common\Team Fortress 2\tf')
+            if os.path.isdir(tf_root):
+                return tf_root
+    return None
+
+
 def main():
     app_path = get_path()
     data_file = None
@@ -178,7 +208,7 @@ def main():
         sys.exit(1)
 
     try:
-        tf = steam.tf2()
+        tf = tf2()
         if not tf:
             error('TF2 is not installed properly...')
             sys.exit(1)
@@ -190,7 +220,6 @@ def main():
     print("Casual mode map selection tool for Team Fortress 2")
     print("Maps loaded successfully.")
 
-    # Add terminal-based functionality here
     while True:
         print("\n1. List maps")
         print("2. Read casual map selection")
