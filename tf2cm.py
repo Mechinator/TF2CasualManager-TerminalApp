@@ -5,11 +5,7 @@ import os
 import sys
 import traceback
 
-import wx
-
-import icon
 import steam
-import tf2cm_wx
 
 __version__ = '1.5.1'
 
@@ -148,21 +144,13 @@ def write_cm(data, path=None):
         f.write(json.dumps(data, indent=None, separators=(',', ':')))
 
 
-def error(frame, msg):
-    dlg = wx.MessageDialog(frame, msg, 'TF2CM Error', wx.ICON_ERROR)
-    dlg.ShowModal()
-    dlg.Destroy()
+def error(msg):
+    print(f"Error: {msg}")
 
 
-if __name__ == '__main__':
-    app = wx.App(False)
-    frame = tf2cm_wx.frameMain(None)
-    app_icon = wx.Icon()
-    app_icon.CopyFromBitmap(icon.icon.GetBitmap())
-    frame.SetIcon(app_icon)
-    data_file = None
+def main():
     app_path = get_path()
-    frame.app_path = app_path
+    data_file = None
     path = [
         os.path.join(app_path, r'data\casual.min.json'),
         os.path.join(app_path, r'data\casual.json')
@@ -172,31 +160,69 @@ if __name__ == '__main__':
             data_file = f
             break
     if not data_file:
-        error(frame, 'Map selection data file not found.\nPlease re-download TF2CM.')
+        error('Map selection data file not found.\nPlease re-download TF2CM.')
         sys.exit(1)
     casual = dict()
     try:
         with codecs.open(data_file, encoding='utf-8') as f:
             casual = json.loads(f.read())
     except:
-        error(frame, 'Map selection data file is broken.\nPlease re-download TF2CM.')
+        error('Map selection data file is broken.\nPlease re-download TF2CM.')
         sys.exit(1)
     maps_data, groups = load_maps(casual)
-    frame.casual = casual
-    frame.maps_data = maps_data
-    frame.groups = groups
-    frame.load_map_struct()
+
     try:
-        frame.cm = read_cm()
+        cm = read_cm()
     except:
-        error(frame, traceback.format_exc())
+        error(traceback.format_exc())
         sys.exit(1)
-    frame.load_cm()
-    frame.tf = steam.tf2()
-    if not frame.tf:
-        error(frame, 'TF2 is not installed properly...')
+
+    try:
+        tf = steam.tf2()
+        if not tf:
+            error('TF2 is not installed properly...')
+            sys.exit(1)
+    except:
+        error('Error checking TF2 installation')
         sys.exit(1)
-    frame.app_version = __version__
-    frame.SetTitle('{} {}'.format(frame.GetTitle(), __version__))
-    frame.Show(True)
-    app.MainLoop()
+
+    print(f"TF2CM version {__version__}")
+    print("Casual mode map selection tool for Team Fortress 2")
+    print("Maps loaded successfully.")
+
+    # Add terminal-based functionality here
+    while True:
+        print("\n1. List maps")
+        print("2. Read casual map selection")
+        print("3. Write casual map selection")
+        print("4. Exit")
+        choice = input("Enter your choice: ")
+        if choice == '1':
+            for map_bsp, map_obj in maps_data.items():
+                print(f"{map_obj.name} ({map_bsp})")
+        elif choice == '2':
+            casual_path = input("Enter the path to your casual map selection file: ")
+            selected_maps = read_casual(casual_path, groups)
+            if selected_maps:
+                print("Selected maps:")
+                for map_name in selected_maps:
+                    print(map_name)
+            else:
+                error("Could not read the casual map selection file.")
+        elif choice == '3':
+            casual_path = input("Enter the path to save your casual map selection file: ")
+            selected_maps = input("Enter the map names to select (comma-separated): ").split(',')
+            success = write_casual(casual_path, selected_maps, maps_data)
+            if success:
+                print("Casual map selection file written successfully.")
+            else:
+                error("Could not write the casual map selection file.")
+        elif choice == '4':
+            print("Exiting...")
+            break
+        else:
+            print("Invalid choice, please try again.")
+
+
+if __name__ == '__main__':
+    main()
